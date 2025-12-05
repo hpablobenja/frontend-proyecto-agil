@@ -1,353 +1,299 @@
-
+// app/dashboard/productos/page.tsx
 "use client";
 
-import React, { useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Pencil, Trash2, Plus } from "lucide-react";
+import api from "@/lib/api";
+import { toast } from "sonner";
+
+// Importar tabla de Shadcn
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Product = {
   id: string;
-  category: string;
-  name: string;
-  price_unit: number;
-  price_docena?: number;
-  price_media_docena?: number;
-  stock_min?: number;
-  stock_init?: number;
+  nombre: string;
+  descripcion?: string;
+  precio: number;
+  categoria: string;
+  codigo_barra?: string;
+  stock_actual: number;
+  created_at: string;
 };
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>(
-    [
-      {
-        id: "1",
-        category: "Galleta",
-        name: "Galletas de chocolate",
-        price_unit: 12,
-        price_docena: 140,
-        price_media_docena: 70,
-        stock_min: 10,
-        stock_init: 40,
-      },
-      {
-        id: "2",
-        category: "Bebida caliente",
-        name: "Cafe americano",
-        price_unit: 12,
-        stock_init: 40,
-      },
-      {
-        id: "3",
-        category: "Refresco",
-        name: "Coca cola",
-        price_unit: 12,
-        stock_init: 40,
-      },
-      {
-        id: "4",
-        category: "Bebida fria",
-        name: "Limonada",
-        price_unit: 12,
-        stock_init: 40,
-      },
-      {
-        id: "5",
-        category: "Galleta",
-        name: "Galletas de vainilla",
-        price_unit: 12,
-        price_docena: 140,
-        price_media_docena: 70,
-        stock_init: 40,
-      },
-      {
-        id: "6",
-        category: "Galleta",
-        name: "Galletas de limon",
-        price_unit: 12,
-        price_docena: 140,
-        price_media_docena: 70,
-        stock_init: 40,
-      },
-    ] as Product[]
-  );
-
-  
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [categoriaFilter, setCategoriaFilter] = useState("");
+
   const [form, setForm] = useState({
-    category: "",
-    name: "",
-    price_unit: "",
-    price_docena: "",
-    price_media_docena: "",
-    stock_min: "",
-    stock_init: "",
+    nombre: "",
+    descripcion: "",
+    precio: "",
+    categoria: "",
+    codigo_barra: "",
   });
 
-  function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) {
-    const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
-  }
+  const loadProducts = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append("search", search);
+      if (categoriaFilter) params.append("categoria", categoriaFilter);
 
-  function resetForm() {
+      const data = await api(`/productos?${params.toString()}`);
+      setProducts(data);
+    } catch (error) {
+      // toast ya lo maneja
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProducts();
+  }, [search, categoriaFilter]);
+
+  const resetForm = () => {
     setForm({
-      category: "",
-      name: "",
-      price_unit: "",
-      price_docena: "",
-      price_media_docena: "",
-      stock_min: "",
-      stock_init: "",
+      nombre: "",
+      descripcion: "",
+      precio: "",
+      categoria: "",
+      codigo_barra: "",
     });
-  }
+    setEditingId(null);
+  };
 
-  function handleCreate(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!form.name || !form.price_unit) {
-      alert("El nombre y el precio por unidad son obligatorios");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.nombre || !form.precio || !form.categoria) {
+      toast.error("Campos obligatorios faltantes");
       return;
     }
-    const newProduct: Product = {
-      id: String(Date.now()),
-      category: form.category || "Sin categoria",
-      name: form.name,
-      price_unit: Number(form.price_unit),
-      price_docena: form.price_docena ? Number(form.price_docena) : undefined,
-      price_media_docena: form.price_media_docena
-        ? Number(form.price_media_docena)
-        : undefined,
-      stock_min: form.stock_min ? Number(form.stock_min) : undefined,
-      stock_init: form.stock_init ? Number(form.stock_init) : undefined,
-    };
-    setProducts((p) => [newProduct, ...p]);
-    setOpen(false);
-    resetForm();
-  }
 
-  function handleDelete(id: string) {
-    if (!confirm("¿Eliminar producto?")) return;
-    setProducts((p) => p.filter((x) => x.id !== id));
-  }
+    try {
+      if (editingId) {
+        await api(`/productos/${editingId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            nombre: form.nombre,
+            descripcion: form.descripcion || undefined,
+            precio: Number(form.precio),
+            categoria: form.categoria,
+            codigo_barra: form.codigo_barra || undefined,
+          }),
+        });
+        toast.success("Éxito", { description: "Producto actualizado" });
+      } else {
+        await api("/productos", {
+          method: "POST",
+          body: JSON.stringify({
+            nombre: form.nombre,
+            descripcion: form.descripcion || undefined,
+            precio: Number(form.precio),
+            categoria: form.categoria,
+            codigo_barra: form.codigo_barra || undefined,
+          }),
+        });
+        toast.success("Éxito", { description: "Producto creado" });
+      }
+      setOpen(false);
+      resetForm();
+      loadProducts();
+    } catch (error) {
+      // toast ya lo maneja
+    }
+  };
+
+  const handleEdit = (product: Product) => {
+    setForm({
+      nombre: product.nombre,
+      descripcion: product.descripcion || "",
+      precio: String(product.precio),
+      categoria: product.categoria,
+      codigo_barra: product.codigo_barra || "",
+    });
+    setEditingId(product.id);
+    setOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Eliminar este producto?")) return;
+    try {
+      await api(`/productos/${id}`, { method: "DELETE" });
+      toast.success("Éxito", { description: "Producto eliminado" });
+      loadProducts();
+    } catch (error) {
+      // toast ya lo maneja
+    }
+  };
 
   return (
     <div className="p-6">
-      
-      <div className="flex items-start justify-between mb-8">
-        <h1 className="text-2xl font-serif">Gestión de Productos</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Productos</h1>
+        <Button
+          onClick={() => {
+            resetForm();
+            setOpen(true);
+          }}
+          className="bg-[#3F51B5]"
+        >
+          <Plus className="mr-2 h-4 w-4" /> Nuevo Producto
+        </Button>
+      </div>
 
-        <div>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-[#3f51b5] hover:bg-[#3647a8] text-white px-4 py-3 rounded-md flex items-center gap-2">
-                <span>Nuevo producto</span>
-                <Plus className="w-5 h-5" />
-              </Button>
-            </DialogTrigger>
+      <div className="mb-6 flex gap-4">
+        <Input
+          placeholder="Buscar por nombre o código..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm"
+        />
+        <Input
+          placeholder="Filtrar por categoría"
+          value={categoriaFilter}
+          onChange={(e) => setCategoriaFilter(e.target.value)}
+          className="max-w-xs"
+        />
+      </div>
 
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="text-center text-xl text-[#3f51b5]">
-                  Registro productos
-                </DialogTitle>
-                <DialogDescription className="text-center mb-4">
-                  Completa los datos para registrar un producto
-                </DialogDescription>
-              </DialogHeader>
-
-              <form onSubmit={handleCreate} className="space-y-4 py-2">
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <Label htmlFor="category">Categoria</Label>
-                    <Select
-                      onValueChange={(v) => setForm((s) => ({ ...s, category: v }))}
-                      value={form.category}
+      {loading ? (
+        <div className="text-center py-10">Cargando productos...</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Categoría</TableHead>
+                <TableHead>Precio (Bs.)</TableHead>
+                <TableHead>Stock</TableHead>
+                <TableHead>Código</TableHead>
+                <TableHead>Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {products.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>{p.nombre}</TableCell>
+                  <TableCell>{p.categoria}</TableCell>
+                  <TableCell>{p.precio}</TableCell>
+                  <TableCell>{p.stock_actual}</TableCell>
+                  <TableCell>{p.codigo_barra || "-"}</TableCell>
+                  <TableCell className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleEdit(p)}
                     >
-                      <SelectTrigger id="category" className="w-full">
-                        <SelectValue placeholder="Categoria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Galleta">Galleta</SelectItem>
-                        <SelectItem value="Bebida caliente">
-                          Bebida caliente
-                        </SelectItem>
-                        <SelectItem value="Bebida fria">Bebida fria</SelectItem>
-                        <SelectItem value="Refresco">Refresco</SelectItem>
-                        <SelectItem value="Otro">Otro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="name">Nombre</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      placeholder="Nombre"
-                      value={form.name}
-                      onChange={handleChange}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="price_unit">Precio unidad</Label>
-                    <Input
-                      id="price_unit"
-                      name="price_unit"
-                      placeholder="Precio unidad"
-                      value={form.price_unit}
-                      onChange={handleChange}
-                      type="number"
-                      step="0.01"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="price_docena">Docena</Label>
-                    <Input
-                      id="price_docena"
-                      name="price_docena"
-                      placeholder="Docena"
-                      value={form.price_docena}
-                      onChange={handleChange}
-                      type="number"
-                      step="0.01"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="price_media_docena">Media docena</Label>
-                    <Input
-                      id="price_media_docena"
-                      name="price_media_docena"
-                      placeholder="Media docena"
-                      value={form.price_media_docena}
-                      onChange={handleChange}
-                      type="number"
-                      step="0.01"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="stock_min">Stock mínimo</Label>
-                    <Input
-                      id="stock_min"
-                      name="stock_min"
-                      placeholder="Stock mínimo"
-                      value={form.stock_min}
-                      onChange={handleChange}
-                      type="number"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="stock_init">Stock inicial</Label>
-                    <Input
-                      id="stock_init"
-                      name="stock_init"
-                      placeholder="Stock inicial"
-                      value={form.stock_init}
-                      onChange={handleChange}
-                      type="number"
-                    />
-                  </div>
-                </div>
-
-                <DialogFooter className="flex items-center justify-between mt-2">
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      setOpen(false);
-                      resetForm();
-                    }}
-                    type="button"
-                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3"
-                  >
-                    Cancelar
-                  </Button>
-
-                  <Button
-                    type="submit"
-                    className="bg-[#3f51b5] hover:bg-[#3647a8] text-white px-6 py-3"
-                  >
-                    Aceptar
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                      <Pencil className="h-4 w-4 text-blue-600" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDelete(p.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
-      </div>
+      )}
 
-    
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {products.map((p) => (
-          <Card key={p.id} className="p-4 bg-gray-100 rounded-lg relative">
-            
-            <div className="absolute top-3 right-3 flex items-center gap-3">
-              <button
-                title="Editar"
-                onClick={() => alert("Editar (implementar en proceso)")}
-                className="text-blue-600"
-              >
-                <Pencil />
-              </button>
-              <button
-                title="Eliminar"
-                onClick={() => handleDelete(p.id)}
-                className="text-red-600"
-              >
-                <Trash2 />
-              </button>
+      {/* Dialog para crear/editar */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar" : "Nuevo"} Producto</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label>Nombre *</Label>
+              <Input
+                value={form.nombre}
+                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                required
+              />
             </div>
-
-            <CardHeader className="p-0 mb-2">
-              <CardTitle className="text-sm text-gray-600">{p.category}</CardTitle>
-            </CardHeader>
-
-            <CardContent className="p-0">
-              <h3 className="text-lg font-medium mb-3">{p.name}</h3>
-
-              <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
-                <div>Precio unidad:</div>
-                <div className="text-right">Bs. {p.price_unit}</div>
-
-                <div>Docena:</div>
-                <div className="text-right">
-                  {p.price_docena ? `Bs. ${p.price_docena}` : "-"}
-                </div>
-
-                <div>Media docena:</div>
-                <div className="text-right">
-                  {p.price_media_docena ? `Bs. ${p.price_media_docena}` : "-"}
-                </div>
-
-                <div>Stock:</div>
-                <div className="text-right">{p.stock_init ?? 0} unidades</div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            <div>
+              <Label>Categoría *</Label>
+              <Input
+                value={form.categoria}
+                onChange={(e) =>
+                  setForm({ ...form, categoria: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div>
+              <Label>Precio *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={form.precio}
+                onChange={(e) =>
+                  setForm({ ...form, precio: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div>
+              <Label>Descripción</Label>
+              <Input
+                value={form.descripcion}
+                onChange={(e) =>
+                  setForm({ ...form, descripcion: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Código de barras</Label>
+              <Input
+                value={form.codigo_barra}
+                onChange={(e) =>
+                  setForm({ ...form, codigo_barra: e.target.value })
+                }
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" className="bg-[#3F51B5]">
+                {editingId ? "Actualizar" : "Crear"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

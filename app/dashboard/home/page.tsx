@@ -1,122 +1,89 @@
+// app/dashboard/home/page.tsx
 "use client";
 
-import React from "react";
-import { Users, Box, Tag, AlertCircle } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DollarSign, Package, ShoppingCart, TrendingUp } from "lucide-react";
+import api from "@/lib/api";
 
-function StatCard({ title, value, icon }: { title: string; value: React.ReactNode; icon: React.ReactNode }) {
+export default function DashboardHome() {
+  const [stats, setStats] = useState({
+    totalProductos: 0,
+    stockBajo: 0,
+    ventasHoy: { count: 0, total: 0 },
+    movimientosHoy: 0,
+    user: { username: "", role: "" },
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        const data = await api("/dashboard");
+        setStats(data);
+      } catch (err) {
+        // toast ya maneja el error
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDashboard();
+  }, []);
+
+  if (loading) {
+    return <div className="p-6 text-center">Cargando dashboard...</div>;
+  }
+
   return (
-    <Card>
-      <div className="flex items-center justify-between p-6">
-        <div>
-          <div className="text-sm text-gray-600 font-medium">{title}</div>
-          <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
-        </div>
-        <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-blue-50">
-          {icon}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-export default function DashboardPage() {
-  return (
-    <div className="p-6">
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          title="Usuarios"
-          value={4}
-          icon={<Users className="w-6 h-6 text-blue-600" />}
-        />
-
-        <StatCard
-          title="Productos"
-          value={6}
-          icon={<Box className="w-6 h-6 text-blue-600" />}
-        />
-
-        <StatCard
-          title="Ventas totales"
-          value={<span>$ 0.00</span>}
-          icon={<Tag className="w-6 h-6 text-blue-600" />}
-        />
-
-        <StatCard
-          title="Stock bajo"
-          value={2}
-          icon={<AlertCircle className="w-6 h-6 text-red-500" />}
-        />
+    <div className="p-6 space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold">Bienvenido, {stats.user.username}!</h1>
+        <p className="text-gray-600">Resumen del día de hoy</p>
       </div>
 
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <section>
-          <h2 className="text-xl font-medium mb-4">Movimientos recientes</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Productos Totales</CardTitle>
+            <Package className="h-5 w-5 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{Number(stats.totalProductos)}</p>
+          </CardContent>
+        </Card>
 
-          <div className="space-y-4">
-            
-            <Card className="p-4">
-              <CardHeader>
-                <CardTitle className="text-sm">Venta #001</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-gray-600">1 unidad - Galleta sabor vainilla</div>
-              </CardContent>
-              <CardFooter className="text-xs text-gray-500">Hoy 10:12</CardFooter>
-            </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Stock Bajo (≤10)</CardTitle>
+            <TrendingUp className="h-5 w-5 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-orange-600">{Number(stats.stockBajo)}</p>
+          </CardContent>
+        </Card>
 
-            <Card className="p-4">
-              <CardHeader>
-                <CardTitle className="text-sm">Ingreso de stock</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-gray-600">5 unidades - Producto: Caja azul</div>
-              </CardContent>
-              <CardFooter className="text-xs text-gray-500">Ayer 16:40</CardFooter>
-            </Card>
-          </div>
-        </section>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Ventas Hoy</CardTitle>
+            <ShoppingCart className="h-5 w-5 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{Number(stats.ventasHoy.count)}</p>
+            <p className="text-sm text-gray-600">Bs. {Number(stats.ventasHoy.total).toFixed(2)}</p>
+          </CardContent>
+        </Card>
 
-        <section>
-          <h2 className="text-xl font-medium mb-4">Productos más vendidos</h2>
-
-          <div className="space-y-4">
-            <Card className="p-4">
-              <div className="flex items-center">
-                <Avatar className="mr-4 w-12 h-12">
-                  <AvatarImage src="/products/product-1.jpg" alt="Producto 1" />
-                  <AvatarFallback>G1</AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="font-medium">Galleta Vainilla</div>
-                  <div className="text-sm text-gray-600">Vendidas: 12</div>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-4">
-              <div className="flex items-center">
-                <Avatar className="mr-4 w-12 h-12">
-                  <AvatarImage src="/products/product-2.jpg" alt="Producto 2" />
-                  <AvatarFallback>G2</AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="font-medium">Galleta Chocolate</div>
-                  <div className="text-sm text-gray-600">Vendidas: 8</div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </section>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Ingresos Hoy</CardTitle>
+            <DollarSign className="h-5 w-5 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-green-600">
+              Bs. {Number(stats.ventasHoy.total).toFixed(2)}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

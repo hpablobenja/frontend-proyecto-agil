@@ -1,277 +1,303 @@
- 
+// app/dashboard/ventas/page.tsx → VERSIÓN SIMPLIFICADA (solo unidad) - CON TIPO_PAGO
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Plus, DollarSign } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DollarSign, Plus, Trash2 } from "lucide-react";
+import api from "@/lib/api";
+import { toast } from "sonner"
 
+// Tipos de pago permitidos
+const TIPOS_PAGO = ["efectivo", "tarjeta", "transferencia"];
 
 type Product = {
   id: string;
-  name: string;
-  price_unit: number;
-  price_media_docena?: number; 
-  price_docena?: number; 
+  nombre: string;
+  precio: number;
+  stock_actual: number;
 };
 
 type Sale = {
   id: string;
-  productId: string;
-  unitType: "unidad" | "media_docena" | "docena";
-  qty: number;
-  unitPrice: number;
   total: number;
-  actor?: string;
-  date: string;
+  fecha: string;
+  username: string;
+  tipo_pago: string; // ✨ Añadido tipo_pago
+  detalles: Array<{
+    producto_id: string;
+    nombre: string;
+    cantidad: number;
+    precio_unitario: number;
+  }>;
+};
+type Detalle = {
+  producto_id: string;
+  cantidad: number;
 };
 
-export default function SalesPage() {
-  
-  const [products] = useState<Product[]>(() => [
-    { id: "1", name: "Galleta chocolate", price_unit: 17, price_media_docena: 102, price_docena: 204 },
-    { id: "2", name: "Galleta vainilla", price_unit: 15, price_media_docena: 90, price_docena: 180 },
-  ]);
-
-  
-  const [sales, setSales] = useState<Sale[]>(() => {
-    const now = new Date();
-    return [
-      {
-        id: "s1",
-        productId: "1",
-        unitType: "unidad",
-        qty: 2,
-        unitPrice: 17,
-        total: 34,
-        actor: "vendedor",
-        date: now.toISOString(),
-      },
-    ];
-  });
-
-  
+export default function VentasPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    productId: "",
-    unitType: "unidad",
-    qty: "1",
-    actor: "",
-    note: "",
-  });
 
-  
-  const totalIncome = useMemo(() => sales.reduce((s, v) => s + v.total, 0), [sales]);
+  const [detalles, setDetalles] = useState<Detalle[]>([]);
+  const [tipoPagoSeleccionado, setTipoPagoSeleccionado] = useState<string>(""); // ✨ Nuevo estado para el tipo de pago
 
-  function resetForm() {
-    setForm({ productId: "", unitType: "unidad", qty: "1", actor: "", note: "" });
-  }
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
-  }
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [prods, ventas] = await Promise.all([
+        api("/productos"),
+        api("/ventas?limit=50"),
+      ]);
+      setProducts(prods);
+      setSales(ventas.map((v: any) => ({
+        ...v,
+        detalles: v.detalles ?? [] 
+      })));
 
-  function computeUnitPrice(product: Product, unitType: Sale["unitType"]) {
+    } catch (error: any) {
+        console.error("Login error:", error);
+        toast.error(
+          error.message,
+          { duration: 4000 }
+        )} finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const addDetalle = () => {
+    setDetalles([...detalles, { producto_id: "", cantidad: 1 }]);
+  };
+
+  const removeDetalle = (index: number) => {
+    setDetalles(detalles.filter((_, i) => i !== index));
+  };
+
+  const updateDetalle = <K extends keyof Detalle>(
+  index: number,
+  field: K,
+  value: Detalle[K]
+) => {
+  const nuevos = [...detalles];
+  nuevos[index][field] = value;
+  setDetalles(nuevos);
+};
+
+
+  const totalVenta = detalles.reduce((sum, d) => {
+    const producto = products.find(p => p.id === d.producto_id);
+    return sum + (producto ? producto.precio * d.cantidad : 0);
+  }, 0);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // ✨ Validación del tipo de pago
+    if (!tipoPagoSeleccionado) {
+        toast.error("Selecciona un tipo de pago");
+        return;
+    }
     
-    if (unitType === "unidad") return product.price_unit;
-    if (unitType === "media_docena") {
-      if (product.price_media_docena) return product.price_media_docena / 6;
-      if (product.price_unit) return product.price_unit; 
+    if (detalles.length === 0 || detalles.some(d => !d.producto_id || d.cantidad <= 0)) {
+      toast.error("Completa todos los productos y cantidades");
+      return;
     }
-    if (unitType === "docena") {
-      if (product.price_docena) return product.price_docena / 12;
-      if (product.price_unit) return product.price_unit;
-    }
-    return product.price_unit;
-  }
 
-  function handleCreateSale(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!form.productId) {
-      alert("Selecciona un producto");
-      return;
-    }
-    const qty = Number(form.qty);
-    if (!qty || qty <= 0) {
-      alert("Cantidad inválida");
-      return;
-    }
-    const product = products.find((p) => p.id === form.productId)!;
-    if (!product) return;
-    const unitPrice = computeUnitPrice(product, form.unitType as Sale["unitType"]);
-    const total = parseFloat((unitPrice * qty).toFixed(2));
-    const newSale: Sale = {
-      id: String(Date.now()),
-      productId: product.id,
-      unitType: form.unitType as Sale["unitType"],
-      qty,
-      unitPrice,
-      total,
-      actor: form.actor || "vendedor",
-      date: new Date().toISOString(),
+    const payload = {
+      tipo_pago: tipoPagoSeleccionado, // ✨ Enviando tipo_pago
+      detalles: detalles.map(d => ({
+        producto_id: d.producto_id,
+        cantidad: d.cantidad,
+      })),
     };
-    setSales((s) => [newSale, ...s]);
-    setOpen(false);
-    resetForm();
-  }
 
+    try {
+      await api("/ventas", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      toast.success("¡Venta registrada!", {
+                description: `Total: Bs. ${totalVenta.toFixed(2)}`,
+                duration: 3000,
+              });
+      setOpen(false);
+      setDetalles([]);
+      setTipoPagoSeleccionado(""); // ✨ Limpiar tipo de pago
+      loadData();
+    } catch (err: any) {
+      toast.error("Stock insuficiente o error");
+
+    }
+  };
   
-  function getProductById(id: string) {
-    return products.find((p) => p.id === id);
-  }
+  // ✨ Función para abrir el modal y reiniciar estados
+  const handleOpenNewSale = () => {
+      setDetalles([]);
+      setTipoPagoSeleccionado(TIPOS_PAGO[0]); // Seleccionar el primero por defecto
+      setOpen(true);
+  };
 
-  function formatDateTime(iso: string) {
-    const d = new Date(iso);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return { date: `${day}/${month}/${year}`, time: `${hours}:${minutes}` };
-  }
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  };
 
   return (
-    <div className="p-6">
-      <div className="flex items-start justify-between mb-6">
-        <h1 className="text-2xl font-serif">Registro de ventas</h1>
-
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#3f51b5] hover:bg-[#3647a8] text-white px-4 py-3 rounded-md flex items-center gap-2">
-              <span>Nueva venta</span>
-              <Plus className="w-5 h-5" />
-            </Button>
-          </DialogTrigger>
-
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-center text-xl text-[#3f51b5]">Registrar venta</DialogTitle>
-              <DialogDescription className="text-center mb-4">Registro rápido de ventas</DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleCreateSale} className="space-y-4 py-2">
-              <div>
-                <Label htmlFor="product">Seleccione producto</Label>
-                <Select
-                  onValueChange={(v) => setForm((s) => ({ ...s, productId: v }))}
-                  value={form.productId}
-                >
-                  <SelectTrigger id="product" className="w-full">
-                    <SelectValue placeholder="Seleccione producto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="unitType">Unidad de venta</Label>
-                <Select
-                  onValueChange={(v) => setForm((s) => ({ ...s, unitType: v }))}
-                  value={form.unitType}
-                >
-                  <SelectTrigger id="unitType" className="w-full">
-                    <SelectValue placeholder="Unidad de venta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unidad">Unidad</SelectItem>
-                    <SelectItem value="media_docena">Media docena</SelectItem>
-                    <SelectItem value="docena">Docena</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="qty">Cantidad</Label>
-                <Input id="qty" name="qty" type="number" min={1} value={form.qty} onChange={handleChange} />
-              </div>
-
-              <div>
-                <Label htmlFor="actor">Vendido por</Label>
-                <Input id="actor" name="actor" value={form.actor} onChange={handleChange} placeholder="vendedor" />
-              </div>
-
-              <div>
-                <Label htmlFor="note">Nota (opcional)</Label>
-                <Textarea id="note" name="note" value={form.note} onChange={handleChange} rows={3} />
-              </div>
-
-              <DialogFooter className="flex items-center justify-between mt-2">
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    setOpen(false);
-                    resetForm();
-                  }}
-                  type="button"
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3"
-                >
-                  Cancelar
-                </Button>
-
-                <Button type="submit" className="bg-[#3f51b5] hover:bg-[#3647a8] text-white px-6 py-3">
-                  Aceptar
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+    <div className="p-6 space-y-8">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Ventas</h1>
+        <Button onClick={handleOpenNewSale} className="bg-[#3F51B5]"> {/* ✨ Usar nueva función */}
+          <Plus className="mr-2 h-5 w-5" /> Nueva Venta
+        </Button>
       </div>
 
-      <div className="mb-4 text-sm">
-        <span className="mr-2">Ingresos totales:</span>
-        <strong>Bs. {totalIncome.toFixed(2)}</strong>
+      <div className="text-2xl font-bold text-green-600">
+        Ingresos totales: Bs. {sales.reduce((s, v) => s + Number(v.total), 0).toFixed(2)}
       </div>
 
       <div className="space-y-6">
-        {sales.length === 0 && <div className="text-sm text-gray-500">No hay ventas</div>}
-
-        {sales.map((s) => {
-          const prod = getProductById(s.productId);
-          const dt = formatDateTime(s.date);
-          return (
-            <div key={s.id} className="bg-[#e6e6e6] p-6 flex items-start gap-6">
-              <div className="shrink-0 text-green-500">
-                <DollarSign className="w-7 h-7" />
+        {loading ? (
+          <p>Cargando...</p>
+        ) : sales.length === 0 ? (
+          <p className="text-center text-gray-500 py-10">No hay ventas registradas</p>
+        ) : (
+          sales.map((venta) => (
+            <div key={venta.id} className="bg-gray-50 rounded-lg p-6 flex items-start gap-4">
+              <div className="p-3 bg-green-100 rounded-full">
+                <DollarSign className="w-6 h-6 text-green-600" />
               </div>
-
               <div className="flex-1">
-                <h3 className="font-medium text-lg">{prod?.name ?? "—"}</h3>
-
-                <div className="mt-2 text-sm text-gray-700 space-y-1">
-                  <div>Cantidad: {s.qty} unidades</div>
-                  <div>Precio unitario: Bs. {s.unitPrice}</div>
-                  <div>Total: Bs. {s.total}</div>
-                  {s.actor && <div>Vendido por: {s.actor}</div>}
-                  {s && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {dt.date} — {dt.time}
+                <div className="flex justify-between">
+                  <div>
+                    <h3 className="font-bold text-lg">Venta #{venta.id}</h3>
+                    {/* ✨ Mostrar tipo_pago */}
+                    <p className="text-sm text-gray-600">Por: {venta.username} | Pago: **{venta.tipo_pago}**</p> 
+                    <p className="text-xs text-gray-500">{formatDate(venta.fecha)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-green-600">Bs. {Number(venta.total).toFixed(2)}</p>
+                  </div>
+                </div>
+                <div className="mt-3 text-sm space-y-1">
+                  {venta.detalles.map((d, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span>{d.cantidad} × {d.nombre}</span>
+                      <span>Bs. {(d.cantidad * d.precio_unitario).toFixed(2)}</span>
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             </div>
-          );
-        })}
+          ))
+        )}
       </div>
+
+      {/* Modal Nueva Venta - SIMPLIFICADO */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Nueva Venta</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* ✨ Campo Tipo de Pago */}
+            <div className="space-y-2">
+                <Label htmlFor="tipo-pago">Tipo de Pago</Label>
+                <Select
+                    value={tipoPagoSeleccionado}
+                    onValueChange={setTipoPagoSeleccionado}
+                >
+                    <SelectTrigger id="tipo-pago">
+                        <SelectValue placeholder="Seleccionar tipo de pago" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {TIPOS_PAGO.map((tipo) => (
+                            <SelectItem key={tipo} value={tipo}>
+                                {tipo}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+
+            {/* Lista de Detalles de la Venta */}
+            <div className="space-y-4">
+              {detalles.map((detalle, index) => (
+                <div key={index} className="grid grid-cols-12 gap-3 items-end border-b pb-4">
+                  <div className="col-span-7">
+                    <Label>Producto</Label>
+                    <Select
+                      value={detalle.producto_id}
+                      onValueChange={(v) => updateDetalle(index, "producto_id", v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar producto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.nombre} - Bs. {p.precio} (Stock: {p.stock_actual})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-4">
+                    <Label>Cantidad</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={detalle.cantidad}
+                      onChange={(e) => updateDetalle(index, "cantidad", Number(e.target.value) || 1)}
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeDetalle(index)}>
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button type="button" onClick={addDetalle} variant="outline" className="w-full">
+                <Plus className="mr-2 h-4 w-4" /> Agregar producto
+              </Button>
+            </div>
+
+            <div className="text-right text-2xl font-bold text-green-600">
+              Total: Bs. {totalVenta.toFixed(2)}
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="bg-[#3F51B5]" disabled={detalles.length === 0 || totalVenta === 0 || !tipoPagoSeleccionado}>
+                Registrar Venta
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

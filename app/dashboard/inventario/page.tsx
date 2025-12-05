@@ -1,420 +1,245 @@
-
+// app/dashboard/inventario/page.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/table";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, TrendingUp, TrendingDown } from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TrendingUp, TrendingDown, Package } from "lucide-react";
+import api from "@/lib/api";
+import { toast } from "sonner"
 
 type Product = {
   id: string;
-  name: string;
-  category?: string;
-  stock: number;
-  minStock?: number;
-  avatar?: string;
+  nombre: string;
+  stock_actual: number;
 };
 
 type Movement = {
   id: string;
-  type: "Entrada" | "Salida";
-  productId: string;
-  qty: number;
-  motive?: string;
-  actor?: string; 
-  date: string; 
+  producto_id: string;
+  producto_nombre: string;
+  tipo: "entrada" | "salida";
+  cantidad: number;
+  motivo?: string;
+  username: string;
+  fecha: string;
 };
 
-export default function InventoryPage() {
-  
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: "1",
-      name: "Galleta chocolate",
-      category: "Galleta",
-      stock: 100,
-      minStock: 50,
-      avatar:
-        "https://images.unsplash.com/photo-1544025162-d76694265947?w=64&q=80&auto=format&fit=crop",
-    },
-    {
-      id: "2",
-      name: "Galleta vainilla",
-      category: "Galleta",
-      stock: 40,
-      minStock: 10,
-    },
-  ]);
-
-  
-  const [movements, setMovements] = useState<Movement[]>(() => {
-  const now = new Date();
-
-  return [
-    {
-      id: "m1",
-      type: "Entrada",
-      productId: "1",
-      qty: 20,
-      motive: "Ingreso por compra",
-      actor: "vendedor",
-      date: now.toISOString(),
-    },
-    {
-      id: "m2",
-      type: "Salida",
-      productId: "2",
-      qty: 20,
-      motive: "Venta mostrador",
-      actor: "vendedor",
-      date: new Date(now.getTime() - 1000 * 60 * 60 * 24).toISOString(),
-    },
-  ];
-});
-
-  
-  const [tab, setTab] = useState<"stock" | "movements">("stock");
-
-  
+export default function InventarioPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [movements, setMovements] = useState<Movement[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+
   const [form, setForm] = useState({
-    type: "" as "" | "Entrada" | "Salida",
-    productId: "",
-    qty: "",
-    motive: "",
-    actor: "",
+    producto_id: "",
+    tipo: "entrada" as "entrada" | "salida",
+    cantidad: "",
+    motivo: "",
   });
 
-  const productOptions = useMemo(
-    () => products.map((p) => ({ value: p.id, label: p.name })),
-    [products]
-  );
-
-  function resetForm() {
-    setForm({ type: "", productId: "", qty: "", motive: "", actor: "" });
-  }
-
-  function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) {
-    const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
-  }
-
-  function handleCreateMovement(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!form.type || !form.productId || !form.qty) {
-      alert("Completa tipo, producto y cantidad");
-      return;
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [prods, movs] = await Promise.all([
+        api("/productos"),
+        api("/inventario/movimientos"),
+      ]);
+      setProducts(prods);
+      setMovements(movs);
+    } catch (err) {
+      // toast ya lo maneja
+    } finally {
+      setLoading(false);
     }
-    const qty = Number(form.qty);
-    if (isNaN(qty) || qty <= 0) {
-      alert("Cantidad inválida");
-      return;
-    }
+  };
 
-    const prodIndex = products.findIndex((p) => p.id === form.productId);
-    if (prodIndex === -1) {
-      alert("Producto no válido");
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.producto_id || !form.cantidad || Number(form.cantidad) <= 0) {
+      toast.error("Completa todos los campos");
       return;
     }
 
-    
-    setProducts((prev) => {
-      const copy = [...prev];
-      if (form.type === "Entrada") {
-        copy[prodIndex] = { ...copy[prodIndex], stock: copy[prodIndex].stock + qty };
-      } else {
-        copy[prodIndex] = { ...copy[prodIndex], stock: Math.max(0, copy[prodIndex].stock - qty) };
-      }
-      return copy;
-    });
+    try {
+      await api("/inventario/movimiento", {
+        method: "POST",
+        body: JSON.stringify({
+          producto_id: form.producto_id,
+          tipo: form.tipo,
+          cantidad: Number(form.cantidad),
+          motivo: form.motivo || undefined,
+        }),
+      });
 
-    const newMov: Movement = {
-      id: String(Date.now()),
-      type: form.type as "Entrada" | "Salida",
-      productId: form.productId,
-      qty,
-      motive: form.motive,
-      actor: form.actor || "usuario",
-      date: new Date().toISOString(),
-    };
+      toast.success("Éxito", {
+                description: `Movimiento de ${form.tipo} registrado`,
+                duration: 3000,
+              });
+      setOpen(false);
+      setForm({ producto_id: "", tipo: "entrada", cantidad: "", motivo: "" });
+      loadData();
+    } catch (err: any) {
+      toast.error("No se pudo registrar");
+    }
+  };
 
-    setMovements((m) => [newMov, ...m]);
-    setOpen(false);
-    resetForm();
-    setTab("movements");
-  }
-
-  const getProductById = (id: string) => products.find((p) => p.id === id);
-
-  
-  function formatDateTime(iso: string) {
-    const d = new Date(iso);
-   
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return { date: `${day}/${month}/${year}`, time: `${hours}:${minutes}` };
-  }
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  };
 
   return (
-    <div className="p-6">
-      <div className="flex items-start justify-between mb-6">
-        <h1 className="text-2xl font-serif">Gestión de inventario</h1>
-
-        
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#3f51b5] hover:bg-[#3647a8] text-white px-4 py-3 rounded-md flex items-center gap-2">
-              <span>Registrar movimiento</span>
-              <Plus className="w-5 h-5" />
-            </Button>
-          </DialogTrigger>
-
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-center text-xl text-[#3f51b5]">
-                Registro movimiento
-              </DialogTitle>
-              <DialogDescription className="text-center mb-4">
-                Registra una entrada o salida de inventario
-              </DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleCreateMovement} className="space-y-4 py-2">
-              <div>
-                <Label htmlFor="type">Tipo movimiento</Label>
-                <Select
-                  onValueChange={(v) => setForm((s) => ({ ...s, type: v as "Entrada" | "Salida" }))}
-                  value={form.type}
-                >
-                  <SelectTrigger id="type" className="w-full">
-                    <SelectValue placeholder="Tipo movimiento" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Entrada">Entrada</SelectItem>
-                    <SelectItem value="Salida">Salida</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="product">Producto</Label>
-                <Select
-                  onValueChange={(v) => setForm((s) => ({ ...s, productId: v }))}
-                  value={form.productId}
-                >
-                  <SelectTrigger id="product" className="w-full">
-                    <SelectValue placeholder="Producto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {productOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="qty">Cantidad</Label>
-                <Input
-                  id="qty"
-                  name="qty"
-                  type="number"
-                  min={1}
-                  placeholder="Cantidad"
-                  value={form.qty}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="actor">Realizado por</Label>
-                <Input
-                  id="actor"
-                  name="actor"
-                  placeholder="Vendedor / Usuario"
-                  value={form.actor}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="motive">Motivo</Label>
-                <Textarea
-                  id="motive"
-                  name="motive"
-                  placeholder="Motivo (opcional)"
-                  value={form.motive}
-                  onChange={handleChange}
-                  rows={4}
-                />
-              </div>
-
-              <DialogFooter className="flex items-center justify-between mt-2">
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    setOpen(false);
-                    resetForm();
-                  }}
-                  type="button"
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3"
-                >
-                  Cancelar
-                </Button>
-
-                <Button type="submit" className="bg-[#3f51b5] hover:bg-[#3647a8] text-white px-6 py-3">
-                  Aceptar
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+    <div className="p-6 space-y-8">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Inventario</h1>
+        <Button onClick={() => setOpen(true)} className="bg-[#3F51B5]">
+          <Package className="mr-2 h-5 w-5" /> Nuevo Movimiento
+        </Button>
       </div>
 
-      
-      <div className="mb-6">
-        <div className="inline-flex border rounded">
-          <button
-            onClick={() => setTab("stock")}
-            className={`px-4 py-2 ${tab === "stock" ? "bg-white border-r" : "bg-gray-200 border-r"}`}
-          >
-            Stock actual
-          </button>
-          <button
-            onClick={() => setTab("movements")}
-            className={`${tab === "movements" ? "bg-white" : "bg-gray-200"} px-4 py-2`}
-          >
-            Movimientos
-          </button>
-        </div>
-      </div>
-
-      
-      {tab === "stock" && (
-        <div>
+      {/* Tabla de Stock Actual */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Stock Actual</h2>
+        {loading ? (
+          <p>Cargando...</p>
+        ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Producto</TableHead>
-                <TableHead>Stock actual</TableHead>
-                <TableHead>Stock mínimo</TableHead>
-                <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Stock Actual</TableHead>
+                <TableHead className="text-center">Estado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {products.map((p) => (
                 <TableRow key={p.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        {p.avatar ? <AvatarImage src={p.avatar} alt={p.name} /> : <AvatarFallback>{p.name[0]}</AvatarFallback>}
-                      </Avatar>
-                      <div>{p.name}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{p.stock}</TableCell>
-                  <TableCell>{p.minStock ?? "-"}</TableCell>
-                  <TableCell>
-                    {p.minStock !== undefined && p.stock <= p.minStock ? (
-                      <span className="text-red-600">Bajo</span>
+                  <TableCell className="font-medium">{p.nombre}</TableCell>
+                  <TableCell className="text-right">{p.stock_actual}</TableCell>
+                  <TableCell className="text-center">
+                    {p.stock_actual <= 10 ? (
+                      <span className="text-red-600 font-semibold">Bajo</span>
                     ) : (
-                      <span>Normal</span>
+                      <span className="text-green-600">Normal</span>
                     )}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        </div>
-      )}
+        )}
+      </div>
 
-      
-      {tab === "movements" && (
-        <div className="space-y-6">
-          {movements.length === 0 && (
-            <div className="text-sm text-gray-500">No hay movimientos</div>
-          )}
-
-          {movements.map((m) => {
-            const prod = getProductById(m.productId);
-            const dt = formatDateTime(m.date);
-            const isEntrada = m.type === "Entrada";
-
-            return (
-              <div
-                key={m.id}
-                className="bg-[#e6e6e6] rounded-sm p-6 relative flex items-start gap-6"
-              >
-                
-                <div className="shrink-0 mt-1">
-                  {isEntrada ? (
-                    <div className="w-10 h-10 rounded flex items-center justify-center bg-transparent text-green-500">
-                      <TrendingUp className="w-6 h-6" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded flex items-center justify-center bg-transparent text-red-500">
-                      <TrendingDown className="w-6 h-6" />
-                    </div>
-                  )}
+      {/* Historial de Movimientos */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Movimientos Recientes</h2>
+        <div className="space-y-4">
+          {movements.length === 0 ? (
+            <p className="text-gray-500">No hay movimientos registrados</p>
+          ) : (
+            movements.map((m) => (
+              <div key={m.id} className="bg-gray-50 rounded-lg p-5 flex items-start gap-4">
+                <div className={`p-3 rounded-full ${m.tipo === "entrada" ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>
+                  {m.tipo === "entrada" ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
                 </div>
-
-                
                 <div className="flex-1">
-                  <h3 className="font-medium text-lg">{prod?.name ?? "—"}</h3>
-
-                  <div className="mt-2 text-sm text-gray-700 space-y-1">
-                    <div>
-                      <strong>{m.type}:</strong> {m.qty} unidades
-                    </div>
-                    {m.motive && <div>Descripción: {m.motive}</div>}
-                    <div>Realizado: {m.actor ?? "usuario"}</div>
-                  </div>
-                </div>
-
-                
-                <div className="text-right text-sm text-gray-600">
-                  <div>{dt.date}</div>
-                  <div>{dt.time}</div>
+                  <h3 className="font-semibold">{m.producto_nombre}</h3>
+                  <p className="text-sm text-gray-600">
+                    <strong>{m.tipo.toUpperCase()}:</strong> {m.cantidad} unidades
+                    {m.motivo && ` · ${m.motivo}`}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Por: {m.username} · {formatDate(m.fecha)}
+                  </p>
                 </div>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
-      )}
+      </div>
+
+      {/* Modal Nuevo Movimiento */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuevo Movimiento de Inventario</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label>Producto</Label>
+              <Select value={form.producto_id} onValueChange={(v) => setForm({ ...form, producto_id: v })} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar producto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre} (Stock: {p.stock_actual})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Tipo</Label>
+              <Select value={form.tipo} onValueChange={(v: "entrada" | "salida") => setForm({ ...form, tipo: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="entrada">Entrada</SelectItem>
+                  <SelectItem value="salida">Salida</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Cantidad</Label>
+              <Input
+                type="number"
+                min="1"
+                value={form.cantidad}
+                onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
+                required
+              />
+            </div>
+
+            <div>
+              <Label>Motivo (opcional)</Label>
+              <Input
+                value={form.motivo}
+                onChange={(e) => setForm({ ...form, motivo: e.target.value })}
+                placeholder="Compra, devolución, ajuste..."
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="bg-[#3F51B5]">
+                Registrar Movimiento
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

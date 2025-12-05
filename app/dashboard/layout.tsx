@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button"
 import {
   Home,
   User,
@@ -28,7 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <>
-      <nav className="bg-white border-b border-gray-200 fixed z-30 w-full ">
+      <nav className="bg-[#FFDEDE] border-b border-gray-200 fixed z-30 w-full ">
         <div className="px-3 py-3 lg:px-5 lg:pl-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center justify-start">
@@ -54,7 +55,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           className="fixed z-20 h-full top-0 left-0 pt-24 lg:flex flex-shrink-0 flex-col w-64 transition-width duration-150 border-r border-gray-200 bg-white"
           aria-label="Sidebar"
         >
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 ">
             <div className="overflow-y-auto py-5 px-3">
               <ul className="space-y-2">
                 {links.map((link) => {
@@ -79,15 +80,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Logout fijo en la parte inferior */}
             <div className="px-3 pb-6">
               <div className="border-t border-gray-200 pt-4">
-                <Link
-                  href="/auth/login"
-                  className="flex items-center gap-3 p-3 rounded-md border border-gray-200 bg-white hover:bg-gray-50 text-gray-900"
-                >
-                  <span className="flex items-center justify-center w-7 h-7 text-gray-600">
-                    <LogOut className="w-5 h-5" />
-                  </span>
-                  <span className="ml-2 text-sm">Cerrar sesión</span>
-                </Link>
+                <Button
+  variant="ghost"
+  size="sm"
+  onClick={() => {
+    localStorage.removeItem("token");
+    window.location.href = "/auth/login";
+  }}
+  className="text-red-600 hover:bg-red-50"
+>
+  <LogOut className="mr-2 h-4 w-4" />
+  Cerrar sesión
+</Button>
               </div>
             </div>
           </div>
