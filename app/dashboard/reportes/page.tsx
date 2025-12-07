@@ -73,12 +73,23 @@ export default function ReportesPage() {
       ]);
 
       const datosNormalizados: ReportePeriodo[] = Array.isArray(reporteRes)
-        ? reporteRes.map((item: any) => ({
-            periodo: item.periodo || "Sin fecha",
-            total_ventas: Number(item.total_ventas) || 0,
-            total_ventas_monto: Number(item.total_ventas_monto) || 0,
-          }))
-        : [];
+      ? reporteRes.map((item: any) => {
+      let fecha = "Sin fecha";
+      if (item.periodo) {
+        const d = new Date(item.periodo);
+        // Ajustar manualmente a GMT-4 (Bolivia)
+        const offsetMs = 4 * 60 * 60 * 1000; // 4 horas en ms
+        const boliviaTime = new Date(d.getTime() - offsetMs);
+        fecha = boliviaTime.toISOString().replace("T", " ").substring(0, 19);
+      }
+      return {
+        periodo: fecha,
+        total_ventas: Number(item.total_ventas) || 0,
+        total_ventas_monto: Number(item.total_ventas_monto) || 0,
+      };
+    })
+  : [];
+
 
       setDatos(datosNormalizados);
 

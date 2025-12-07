@@ -67,7 +67,7 @@ export default function VentasPage() {
         ...v,
         detalles: v.detalles ?? [] 
       })));
-
+    
     } catch (error: any) {
         console.error("Login error:", error);
         toast.error(
@@ -101,7 +101,7 @@ export default function VentasPage() {
 };
 
 
-  const totalVenta = detalles.reduce((sum, d) => {
+    const totalVenta = detalles.reduce((sum, d) => {
     const producto = products.find(p => p.id === d.producto_id);
     return sum + (producto ? producto.precio * d.cantidad : 0);
   }, 0);
@@ -160,7 +160,6 @@ export default function VentasPage() {
     const d = new Date(dateStr);
     return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   };
-
   return (
     <div className="p-6 space-y-8">
       <div className="flex justify-between items-center">

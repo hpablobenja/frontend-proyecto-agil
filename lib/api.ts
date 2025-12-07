@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 // src/lib/api.ts
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend-proyecto-agil.onrender.com/api";
-
+//const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 let token: string | null = null;
 
 export const setAuthToken = (newToken: string | null) => {
